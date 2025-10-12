@@ -4,74 +4,55 @@ import os
 
 app = Flask(__name__)
 
-# URL do Power Automate
 POWER_AUTOMATE_URL = "https://default4a187474b69b445f9d2db39f721fca.7f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/513438aec46b482e99c4f26ad207b02a/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=_1v0sPD-AVA9nzZujCt-z2QnTZcJ6Ph68bUShDToMAI"
 
-# Token do Asana (adicione como variável de ambiente no Render)
-ASANA_TOKEN = os.getenv("2/1208066562376675/1211268286808494:a77245df670b176f6da14811b6d792e6")
+ASANA_TOKEN = os.environ.get("ASANA_TOKEN")  # Token configurado no Render
 
-@app.route("/asana-webhook", methods=["POST", "GET"])
+@app.route("/asana-webhook", methods=["POST"])
 def asana_webhook():
-    # ✅ Handshake inicial do Asana (primeira verificação do webhook)
+    # 1️⃣ Handshake inicial
     if "X-Hook-Secret" in request.headers:
         response = jsonify({"status": "ok"})
         response.headers["X-Hook-Secret"] = request.headers["X-Hook-Secret"]
-        print("🤝 Handshake recebido e respondido com sucesso.")
+        print("🤝 Handshake recebido do Asana.")
         return response, 200
 
-    # ✅ Leitura segura do corpo JSON
-    data = request.get_json(silent=True)
-    if not data:
-        print("⚠️ Nenhum dado recebido no corpo da requisição.")
-        return jsonify({"status": "no data"}), 200
+    # 2️⃣ Processamento normal
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        print("❌ Erro ao ler JSON:", e)
+        return jsonify({"error": "invalid_json"}), 400
 
-    print("📩 Evento recebido:", data)
+    print("📩 Evento recebido do Asana:", data)
 
-    # ✅ Processar eventos enviados pelo Asana
-    for event in data.get("events", []):
-        action = event.get("action")
-        parent_gid = event.get("parent", {}).get("gid")
-        resource = event.get("resource", {})
-        resource_gid = resource.get("gid")
-        resource_type = resource.get("resource_type")
-
-        print(f"➡️ Ação: {action}, Tipo: {resource_type}, GID: {resource_gid}, Parent: {parent_gid}")
-
-        # 🔒 Só continua se for um evento relevante
-        if action == "added" and parent_gid == "1211142309362230" and resource_type == "task":
-            task_name = None
-
-            # ⚙️ Tenta buscar o nome da tarefa via API (pois 'name' pode não vir no webhook)
-            if ASANA_TOKEN and resource_gid:
-                try:
-                    resp = requests.get(
-                        f"https://app.asana.com/api/1.0/tasks/{resource_gid}",
-                        headers={"Authorization": f"Bearer {ASANA_TOKEN}"},
-                        timeout=10
-                    )
-                    if resp.status_code == 200:
-                        task_data = resp.json().get("data", {})
-                        task_name = task_data.get("name", "Sem nome")
-                        print(f"📝 Nome da tarefa obtido via API: {task_name}")
-                    else:
-                        print(f"⚠️ Erro ao buscar tarefa {resource_gid}: {resp.status_code}")
-                except Exception as e:
-                    print("❌ Erro ao buscar detalhes da tarefa:", e)
-
-            # Se mesmo assim não tiver nome, define um genérico
-            if not task_name:
-                task_name = resource.get("name", "Tarefa sem nome")
-
-            # ✅ Envia para o Power Automate
+    if data and "events" in data:
+        for event in data["events"]:
             try:
-                response = requests.post(
-                    POWER_AUTOMATE_URL,
-                    json={"newFolderName": task_name},
-                    timeout=10
-                )
-                print(f"📤 Enviado para Power Automate: {task_name} | Status: {response.status_code}")
+                # Verifica se é adição de tarefa no projeto alvo
+                if event.get("action") == "added" and event.get("parent", {}).get("gid") == "1211142309362230":
+                    resource_gid = event.get("resource", {}).get("gid")
+                    task_name = event.get("resource", {}).get("name", None)
+
+                    # Se não veio o nome, busca via API
+                    if not task_name and ASANA_TOKEN and resource_gid:
+                        asana_url = f"https://app.asana.com/api/1.0/tasks/{resource_gid}"
+                        headers = {"Authorization": f"Bearer {ASANA_TOKEN}"}
+                        resp = requests.get(asana_url, headers=headers, timeout=10)
+                        if resp.status_code == 200:
+                            task_name = resp.json()["data"].get("name")
+
+                    if not task_name:
+                        print("⚠️ Nenhum nome de tarefa encontrado, evento ignorado.")
+                        continue
+
+                    # Envia ao Power Automate
+                    print(f"📤 Enviando tarefa '{task_name}' ao Power Automate...")
+                    resp = requests.post(POWER_AUTOMATE_URL, json={"newFolderName": task_name}, timeout=10)
+                    print(f"✅ Power Automate respondeu {resp.status_code}")
+
             except Exception as e:
-                print("❌ Erro ao enviar para o Power Automate:", e)
+                print("❌ Erro ao processar evento individual:", e)
 
     return jsonify({"status": "ok"}), 200
 
@@ -79,3 +60,5 @@ def asana_webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
+
