@@ -4,7 +4,7 @@ import os
 
 app = Flask(__name__)
 
-POWER_AUTOMATE_URL = "https://SEU_FLUXO.powerautomate.com/..."
+POWER_AUTOMATE_URL = "https://default4a187474b69b445f9d2db39f721fca.7f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/513438aec46b482e99c4f26ad207b02a/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=_1v0sPD-AVA9nzZujCt-z2QnTZcJ6Ph68bUShDToMAI"
 
 TARGET_PROJECT_GID = "1211142309362230"  # ID do projeto que queremos monitorar
 
@@ -46,6 +46,7 @@ def asana_webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
