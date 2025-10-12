@@ -30,7 +30,12 @@ def asana_webhook():
                 task_id = resource.get("gid")
                 task_name = resource.get("name", "Tarefa sem nome")
 
-                payload = {"taskId": task_id, "taskName": task_name}
+                payload = {"events": [
+        {
+            "taskId": task_gid,
+            "taskName": task_name
+        }
+    ]}
 
                 try:
                     response = requests.post(POWER_AUTOMATE_URL, json=payload, timeout=10)
@@ -46,6 +51,7 @@ def asana_webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
