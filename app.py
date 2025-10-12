@@ -6,7 +6,6 @@ app = Flask(__name__)
 
 POWER_AUTOMATE_URL = "https://default4a187474b69b445f9d2db39f721fca.7f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/513438aec46b482e99c4f26ad207b02a/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=_1v0sPD-AVA9nzZujCt-z2QnTZcJ6Ph68bUShDToMAI"
 
-# ID do projeto que você quer monitorar
 PROJETO_ALVO = "1211142309362230"
 
 @app.route("/asana-webhook", methods=["POST"])
@@ -26,14 +25,15 @@ def asana_webhook():
         task_id = None
         task_name = "Tarefa sem nome"
 
-        if event["resource"]["resource_type"] == "task":
-            task_id = event["resource"]["gid"]
-            task_name = event["resource"].get("name", "Tarefa sem nome")
-        elif event.get("parent") and event["parent"]["resource_type"] == "task":
-            task_id = event["parent"]["gid"]
+        resource = event.get("resource", {})
+        if resource.get("resource_type") == "task":
+            task_id = resource.get("gid")
+            task_name = resource.get("name", "Tarefa sem nome")
+
+        parent = event.get("parent")
+        parent_gid = parent.get("gid") if parent else None
 
         # Filtra apenas tarefas adicionadas ao projeto alvo
-        parent_gid = event.get("parent", {}).get("gid")
         if task_id and parent_gid == PROJETO_ALVO:
             events_para_automate.append({
                 "taskId": task_id,
