@@ -8,7 +8,10 @@ app = Flask(__name__)
 POWER_AUTOMATE_URL = "https://default4a187474b69b445f9d2db39f721fca.7f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/513438aec46b482e99c4f26ad207b02a/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=_1v0sPD-AVA9nzZujCt-z2QnTZcJ6Ph68bUShDToMAI"
 
 TARGET_PROJECT_GID = "1211142309362230"  # projeto de destino
-SOURCE_PROJECT_GID = "1211494910632910"  # projeto de origem (onde as tarefas vêm)
+SOURCE_PROJECT_GIDS = [
+    "1211494910632910",
+    "1213819553879211"
+]  # projeto de origem (onde as tarefas vêm)
 ASANA_TOKEN = os.environ.get("ASANA_TOKEN")  # defina como variável de ambiente
 
 @app.route("/asana-webhook", methods=["POST"])
@@ -45,10 +48,21 @@ def asana_webhook():
                 resp.raise_for_status()
                 projects = [p["gid"] for p in resp.json().get("data", [])]
 
-                if SOURCE_PROJECT_GID in projects:
+                if any(proj in projects for proj in SOURCE_PROJECT_GIDS):
                     # ✅ É uma tarefa vinda do projeto de origem
-                    payload = {"events": [{"taskId": task_id, "taskName": resource.get("name", "Tarefa sem nome")}]}
-                    response = requests.post(POWER_AUTOMATE_URL, json=payload, timeout=10)
+                    projects = [p["gid"] for p in resp.json().get("data", [])]
+
+                    if any(proj in projects for proj in SOURCE_PROJECT_GIDS):
+                        payload = {
+                            "events": [
+                                        {
+                                            "taskId": task_id,
+                                            "taskName": resource.get("name", "Tarefa sem nome")
+                                        }
+                                      ]
+                                  }
+
+                        response = requests.post(POWER_AUTOMATE_URL, json=payload, timeout=10)
 
                     if response.status_code == 200:
                         print("✅ Enviado para Power Automate:", payload)
